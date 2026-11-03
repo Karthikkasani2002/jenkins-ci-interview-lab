@@ -1,5 +1,9 @@
 # Interview guide: Jenkins CI at senior and principal scope
 
+## Repository and current lab status
+
+The public source repo is [Karthikkasani2002/jenkins-ci-interview-lab](https://github.com/Karthikkasani2002/jenkins-ci-interview-lab). Jenkins build #4 validated a local source snapshot; a permanent GitHub Multibranch job and the Docker image stages still need controller plugin setup and agent provisioning.
+
 ## 30-second answer
 
 “I use Jenkins as an orchestration control plane and run builds on isolated agents. Every change gets fast, deterministic feedback: syntax and dependency checks, API tests with coverage, secret scanning, a container build, vulnerability scanning, an SBOM, and a smoke test. The pipeline stores evidence and cleans up. Jenkins does not deploy; a GitOps controller will later reconcile an immutable image digest. I measure feedback time, flakiness, queue delay, and recovery time, then improve the slowest bottleneck.”
@@ -61,3 +65,4 @@ With three years of experience, show senior-level scope through one end-to-end s
 - A critical image CVE has no fix. What is the response and who owns the exception?
 - GitOps fails to reconcile after a new image is published. Which system owns rollback and how is the digest traced?
 - Jenkins controller disk is full. Which data is disposable, which is durable, and how do you prevent recurrence?
+

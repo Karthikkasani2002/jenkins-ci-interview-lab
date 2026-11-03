@@ -2,9 +2,9 @@
 
 ## System view
 
-Local Git revision (current lab) -> Jenkins controller (orchestration only) -> isolated Linux Docker agent -> parallel source and security gates -> container build -> image scan and SBOM -> smoke tests -> JUnit and evidence artifacts.
+GitHub main or pull-request revision -> Jenkins controller (orchestration only) -> isolated Linux Docker agent -> parallel source and security gates -> container build -> image scan and SBOM -> smoke tests -> JUnit and evidence artifacts.
 
-A hosted team setup can replace the local revision with pull-request events and add required checks and branch protection. This project has no remote configured.
+The repository is public. The current Jenkins source-validation job still uses a local bundle snapshot; GitHub Branch Source, webhooks, and a permanent SCM job are not configured yet.
 GitOps delivery will be a separate workflow after CI. Jenkins stops after producing and verifying the image.
 
 ## Trust boundaries
@@ -41,3 +41,4 @@ The test report and SBOM are useful evidence, but they are not proof of artifact
 ## Boundary for GitOps
 
 This pipeline stops after producing and testing a local image. The next phase can publish the image, record its digest and provenance, and open a configuration change for a GitOps controller. The GitOps controller should own environment reconciliation and promotion; Jenkins should not apply manifests directly.
+

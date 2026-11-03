@@ -1,6 +1,6 @@
-# Jenkins environment assessment (sanitized)
+# Jenkins environment assessment (public-safe copy)
 
-Checked on 2026-11-03 while preparing the CI interview lab. Private lab addresses, internal URLs, usernames, and filesystem paths are omitted.
+Checked on 2026-11-03 while preparing the CI interview lab. Private network addresses, internal URLs, usernames, and agent filesystem paths are omitted from this public copy.
 
 ## Controller and nodes
 
@@ -36,7 +36,7 @@ There is no Docker, containerd, BuildKit, Podman, or active LXD runtime. The age
 
 1. Provision the dedicated agent with the tools above. Prefer a version-pinned, managed agent image or VM configuration over installing tools during every build.
 2. Assign `linux` and `docker` labels only after those capabilities are available.
-3. At the time of this assessment the repository remained local with no remote. The temporary validation job used a local Git bundle snapshot.
+3. Configure a Multibranch Pipeline for the public repo `https://github.com/Karthikkasani2002/jenkins-ci-interview-lab`. Install GitHub Branch Source and configure pull-request discovery and webhooks/status reporting.
 4. For controller isolation, set the built-in node executor count to zero; this assessment did not change it.
 
 The temporary source-validation job uses a local Git bundle snapshot and is not the production Jenkinsfile-from-SCM job. The Docker build, Trivy image scan, Syft image SBOM, and container smoke test have not run because the agent does not currently have a container runtime.

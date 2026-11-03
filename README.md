@@ -6,7 +6,7 @@ The service is intentionally small so the discussion can focus on CI architectur
 
 ## Git choice
 
-This project uses local Git on `main` and currently has no remote. It remains local by request, and no source is published. The interview material describes hosted source control, pull requests, and branch protection as production patterns separate from this local setup.
+This public portfolio repository is `Karthikkasani2002/jenkins-ci-interview-lab`. Its `main` branch contains the CI lab and interview material; pull requests and branch protection are the recommended team workflow.
 
 ## What the API covers
 
@@ -18,7 +18,7 @@ This project uses local Git on `main` and currently has no remote. It remains lo
 
 ## CI flow
 
-Local Git revision -> Jenkins Pipeline as Code -> dedicated Linux Docker agent -> preflight and dependency audit -> parallel tests, static checks, and secret scan -> build tested container image -> Trivy scan and SPDX SBOM -> container health and API smoke checks -> JUnit, SBOM, and image metadata.
+GitHub branch or pull request revision -> Jenkins Pipeline as Code -> dedicated Linux Docker agent -> preflight and dependency audit -> parallel tests, static checks, and secret scan -> build tested container image -> Trivy scan and SPDX SBOM -> container health and API smoke checks -> JUnit, SBOM, and image metadata.
 
 | Stage | Gate or evidence |
 |---|---|
@@ -34,7 +34,7 @@ The Jenkinsfile uses Declarative Pipeline with a Jenkinsfile checked into source
 
 ## Current lab execution
 
-The local Jenkins controller's `jenkins-source-validation` job passed build #4 from commit `109f141`: live dependency audit, Gitleaks, static checks, and all 16 tests with JUnit and coverage results. That job used a local Git bundle snapshot; it is a validation job, not the permanent Jenkinsfile-from-SCM job. The full Jenkinsfile's Docker build, Trivy image scan, Syft SBOM, and container smoke test still require the agent to be provisioned with a container runtime and the listed tools. See [the environment assessment](docs/jenkins-environment-assessment.md) for exact host and agent details.
+The local Jenkins controller's `jenkins-source-validation` job passed build #4 from commit `109f141`: live dependency audit, Gitleaks, static checks, and all 16 tests with JUnit and coverage results. That job used a local Git bundle snapshot; it is a validation job, not the permanent Jenkinsfile-from-SCM job. The full Jenkinsfile's Docker build, Trivy image scan, Syft SBOM, and container smoke test still require the agent to be provisioned with a container runtime and the listed tools. See [the environment assessment](docs/jenkins-environment-assessment.md) for sanitized controller and agent status.
 ## Run locally
 
 Requirements: Node.js 24 or newer. There are no third-party npm dependencies.
@@ -59,8 +59,8 @@ The image uses a non-root user, a read-only runtime filesystem, a health check, 
 
 ## Connect Jenkins
 
-1. Make the local Git repository available to Jenkins through a private, read-only SCM path. The Windows workspace is not mounted inside the Jenkins VMs; the successful source-validation job used a local Git bundle snapshot.
-2. Create a Pipeline-from-SCM job pointing to this repository and `Jenkinsfile`. Use a manual trigger or SCM polling while the repository remains local.
+1. Configure a Multibranch Pipeline for `https://github.com/Karthikkasani2002/jenkins-ci-interview-lab` and point it at `Jenkinsfile`. The repo is public, so source checkout does not need a read credential.
+2. Install GitHub Branch Source and configure branch and pull-request discovery plus webhooks/status reporting. The current controller does not yet have this plugin or a permanent SCM job; its successful source-validation job used a local Git bundle snapshot.
 3. Configure the agent label `linux && docker` only after the worker has Node.js 24+, npm, Docker CLI and daemon, curl, sed, seq, Gitleaks, Trivy, and Syft.
 4. Keep Node and scanner versions in a managed agent image. Pin base images and scanner binaries by digest or version.
 5. Set the built-in Jenkins node executor count to zero. Run builds on agents, not the controller. Jenkins documents this controller-isolation recommendation in [Managing Nodes](https://www.jenkins.io/doc/book/managing/nodes/) and [Controller Isolation](https://www.jenkins.io/doc/book/security/controller-isolation/).
@@ -83,3 +83,4 @@ Treat Jenkins as a developer platform, not just a sequence of shell commands. Tr
 Discuss trust boundaries before speed: controller isolation, ephemeral agents, separate untrusted and trusted workloads, credential scope, and provenance of build artifacts. Avoid blind retries on test failures; retry only a known transient operation and preserve the original failure evidence.
 
 See docs/architecture.md and docs/interview-guide.md for the system design and interview narrative.
+
