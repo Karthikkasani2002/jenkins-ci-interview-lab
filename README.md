@@ -84,3 +84,7 @@ Discuss trust boundaries before speed: controller isolation, ephemeral agents, s
 
 See docs/architecture.md and docs/interview-guide.md for the system design and interview narrative.
 
+
+## Roadmap and tracker
+
+Use the [DevOps platform engineering roadmap](docs/platform-engineering-roadmap.md) to track Jenkins completion and the next integrated phases across Terraform, Kubernetes/GitOps, Ansible, observability, middleware, and Python/shell SRE automation. The tracker distinguishes demonstrated work from designs and pending environment setup.
