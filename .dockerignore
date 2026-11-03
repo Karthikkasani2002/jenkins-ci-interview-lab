@@ -1,0 +1,14 @@
+.git
+.gitignore
+.dockerignore
+node_modules
+coverage
+test-results
+artifacts
+.env
+.env.*
+!.env.example
+README.md
+docs
+Jenkinsfile
+*.log
