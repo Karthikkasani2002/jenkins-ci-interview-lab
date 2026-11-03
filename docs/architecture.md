@@ -2,8 +2,9 @@
 
 ## System view
 
-GitHub pull request -> Jenkins controller (orchestration only) -> isolated Linux Docker agent -> parallel source and security gates -> container build -> image scan and SBOM -> smoke tests -> JUnit and evidence artifacts -> required GitHub check -> protected main.
+Local Git revision (current lab) -> Jenkins controller (orchestration only) -> isolated Linux Docker agent -> parallel source and security gates -> container build -> image scan and SBOM -> smoke tests -> JUnit and evidence artifacts.
 
+A hosted team setup can replace the local revision with pull-request events and add required checks and branch protection. This project has no remote configured.
 GitOps delivery will be a separate workflow after CI. Jenkins stops after producing and verifying the image.
 
 ## Trust boundaries

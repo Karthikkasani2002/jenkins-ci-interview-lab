@@ -6,7 +6,7 @@ The service is intentionally small so the discussion can focus on CI architectur
 
 ## Git choice
 
-Use a public GitHub repository for the portfolio remote: it is easy for interviewers to review and supports pull request reviews and required status checks. The project is currently a local Git repository; it has not been published or pushed to an account. Protect the main branch, require review, and require the Jenkins status check before merging. See [GitHub branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+This project uses local Git on `main` and currently has no remote. It remains local by request, and no source is published. The interview material describes hosted source control, pull requests, and branch protection as production patterns separate from this local setup.
 
 ## What the API covers
 
@@ -18,12 +18,12 @@ Use a public GitHub repository for the portfolio remote: it is easy for intervie
 
 ## CI flow
 
-Pull request or branch -> Jenkins multibranch job -> dedicated Linux Docker agent -> preflight and dependency audit -> parallel tests, static checks, and secret scan -> build tested container image -> Trivy scan and SPDX SBOM -> container health and API smoke checks -> JUnit, SBOM, and image metadata -> required GitHub check.
+Local Git revision -> Jenkins Pipeline as Code -> dedicated Linux Docker agent -> preflight and dependency audit -> parallel tests, static checks, and secret scan -> build tested container image -> Trivy scan and SPDX SBOM -> container health and API smoke checks -> JUnit, SBOM, and image metadata.
 
 | Stage | Gate or evidence |
 |---|---|
 | Checkout and preflight | Clean workspace, Node/npm/Docker/scanner versions, reachable Docker daemon |
-| Source checks | Syntax check, dependency audit, 95%+ line coverage, secret scan |
+| Source checks | Syntax check, dependency audit, 100% line coverage, 95%+ branch coverage, secret scan |
 | Container build | Multi-stage build reruns the test suite; runtime image excludes tests |
 | Image security and SBOM | Trivy blocks high/critical findings; Syft writes SPDX JSON |
 | Container smoke test | Health endpoint, API request, non-root user, read-only root filesystem |
@@ -31,6 +31,10 @@ Pull request or branch -> Jenkins multibranch job -> dedicated Linux Docker agen
 
 The Jenkinsfile uses Declarative Pipeline with a Jenkinsfile checked into source control, as recommended by the [Jenkins Pipeline documentation](https://www.jenkins.io/doc/book/pipeline/). The pipeline builds and verifies an image but does not publish or deploy it. That keeps the later GitOps delivery integration as a separate step.
 
+
+## Current lab execution
+
+The local Jenkins controller's `jenkins-source-validation` job passed build #4 from commit `109f141`: live dependency audit, Gitleaks, static checks, and all 16 tests with JUnit and coverage results. That job used a local Git bundle snapshot; it is a validation job, not the permanent Jenkinsfile-from-SCM job. The full Jenkinsfile's Docker build, Trivy image scan, Syft SBOM, and container smoke test still require the agent to be provisioned with a container runtime and the listed tools. See [the environment assessment](../jenkins-environment-assessment.md) for exact host and agent details.
 ## Run locally
 
 Requirements: Node.js 24 or newer. There are no third-party npm dependencies.
@@ -55,13 +59,11 @@ The image uses a non-root user, a read-only runtime filesystem, a health check, 
 
 ## Connect Jenkins
 
-1. Create a Multibranch Pipeline using GitHub Branch Source and point it at this repository.
-2. Configure the agent label linux && docker. The agent needs Node.js 24+, npm, Docker CLI and daemon, curl, sed, seq, Gitleaks, Trivy, and Syft.
-3. Keep the versions of Node and scanner tools in a managed agent image. Pin base images and scanner binaries by digest or version in a production environment.
-4. Install the standard Pipeline, Git, JUnit, and GitHub Branch Source plugins. Configure webhook or organization-folder indexing so pull requests run automatically. GitHub Branch Source can publish commit statuses; GitHub Checks adds richer check runs when supported by your Jenkins core and GitHub App permissions.
-5. In GitHub, protect the main branch, require a review and the Jenkins check, and block force pushes. Make the Jenkins check source explicit where the GitHub integration supports that control. See the [GitHub Checks plugin](https://plugins.jenkins.io/github-checks/) and [GitHub Branch Source plugin](https://plugins.jenkins.io/github-branch-source/) configuration.
-6. Set the built-in Jenkins node executor count to zero. Run builds on agents, not the controller. Jenkins documents this controller-isolation recommendation in [Managing Nodes](https://www.jenkins.io/doc/book/managing/nodes/) and [Controller Isolation](https://www.jenkins.io/doc/book/security/controller-isolation/).
-
+1. Make the local Git repository available to Jenkins through a private, read-only SCM path. The Windows workspace is not mounted inside the Jenkins VMs; the successful source-validation job used a local Git bundle snapshot.
+2. Create a Pipeline-from-SCM job pointing to this repository and `Jenkinsfile`. Use a manual trigger or SCM polling while the repository remains local.
+3. Configure the agent label `linux && docker` only after the worker has Node.js 24+, npm, Docker CLI and daemon, curl, sed, seq, Gitleaks, Trivy, and Syft.
+4. Keep Node and scanner versions in a managed agent image. Pin base images and scanner binaries by digest or version.
+5. Set the built-in Jenkins node executor count to zero. Run builds on agents, not the controller. Jenkins documents this controller-isolation recommendation in [Managing Nodes](https://www.jenkins.io/doc/book/managing/nodes/) and [Controller Isolation](https://www.jenkins.io/doc/book/security/controller-isolation/).
 ### Agent security
 
 Docker daemon access is privileged. The demo uses a static Docker agent label, so restrict it to this trusted lab repository. For untrusted pull requests in production, use disposable isolated agents and a separated builder; do not share a privileged Docker socket or deployment credentials with arbitrary pull-request code. Keep controller credentials out of build workspaces.
@@ -81,6 +83,3 @@ Treat Jenkins as a developer platform, not just a sequence of shell commands. Tr
 Discuss trust boundaries before speed: controller isolation, ephemeral agents, separate untrusted and trusted workloads, credential scope, and provenance of build artifacts. Avoid blind retries on test failures; retry only a known transient operation and preserve the original failure evidence.
 
 See docs/architecture.md and docs/interview-guide.md for the system design and interview narrative.
-
-
-
