@@ -130,4 +130,3 @@ For each major phase, be ready to show:
 - **Evidence:** links to code, CI runs, test reports, SBOMs, dashboards, runbooks, and post-exercise findings. Clearly distinguish personal implementation from proposed future design.
 
 The portfolio should show a coherent platform and the reasoning behind its trade-offs. Tool count alone is not the completion criterion.
-
