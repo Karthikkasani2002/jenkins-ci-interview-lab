@@ -83,4 +83,3 @@ Treat Jenkins as a developer platform, not just a sequence of shell commands. Tr
 Discuss trust boundaries before speed: controller isolation, ephemeral agents, separate untrusted and trusted workloads, credential scope, and provenance of build artifacts. Avoid blind retries on test failures; retry only a known transient operation and preserve the original failure evidence.
 
 See docs/architecture.md and docs/interview-guide.md for the system design and interview narrative.
-
