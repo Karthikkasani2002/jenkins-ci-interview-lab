@@ -34,7 +34,7 @@ The Jenkinsfile uses Declarative Pipeline with a Jenkinsfile checked into source
 
 ## Current lab execution
 
-The local Jenkins controller's `jenkins-source-validation` job passed build #4 from commit `109f141`: live dependency audit, Gitleaks, static checks, and all 16 tests with JUnit and coverage results. That job used a local Git bundle snapshot; it is a validation job, not the permanent Jenkinsfile-from-SCM job. The full Jenkinsfile's Docker build, Trivy image scan, Syft SBOM, and container smoke test still require the agent to be provisioned with a container runtime and the listed tools. See [the environment assessment](../jenkins-environment-assessment.md) for exact host and agent details.
+The local Jenkins controller's `jenkins-source-validation` job passed build #4 from commit `109f141`: live dependency audit, Gitleaks, static checks, and all 16 tests with JUnit and coverage results. That job used a local Git bundle snapshot; it is a validation job, not the permanent Jenkinsfile-from-SCM job. The full Jenkinsfile's Docker build, Trivy image scan, Syft SBOM, and container smoke test still require the agent to be provisioned with a container runtime and the listed tools. See [the environment assessment](docs/jenkins-environment-assessment.md) for exact host and agent details.
 ## Run locally
 
 Requirements: Node.js 24 or newer. There are no third-party npm dependencies.
@@ -83,3 +83,4 @@ Treat Jenkins as a developer platform, not just a sequence of shell commands. Tr
 Discuss trust boundaries before speed: controller isolation, ephemeral agents, separate untrusted and trusted workloads, credential scope, and provenance of build artifacts. Avoid blind retries on test failures; retry only a known transient operation and preserve the original failure evidence.
 
 See docs/architecture.md and docs/interview-guide.md for the system design and interview narrative.
+
