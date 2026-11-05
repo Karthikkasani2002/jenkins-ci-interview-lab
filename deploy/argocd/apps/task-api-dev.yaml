@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: task-api-dev
+  namespace: argocd
+spec:
+  project: upi-lab-dev
+  source:
+    repoURL: https://github.com/Karthikkasani2002/jenkins-ci-interview-lab.git
+    targetRevision: main
+    path: deploy/helm/task-api
+    helm:
+      releaseName: task-api
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: upi-lab-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

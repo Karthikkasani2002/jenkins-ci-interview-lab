@@ -1,0 +1,8 @@
+jenkins:
+  systemMessage: |-
+    Jenkins CI lab. Configuration is managed as code.
+    Build agents are isolated from the controller.
+  numExecutors: 0
+  mode: NORMAL
+  quietPeriod: 5
+  scmCheckoutRetryCount: 2

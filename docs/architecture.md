@@ -2,18 +2,18 @@
 
 ## System view
 
-GitHub main or pull-request revision -> Jenkins controller (orchestration only) -> isolated Linux Docker agent -> parallel source and security gates -> container build -> image scan and SBOM -> smoke tests -> JUnit and evidence artifacts.
+GitHub PR -> Jenkins controller -> disposable untrusted CI agent -> parallel tests/security -> container build/scan/SBOM/smoke -> JUnit evidence. Protected main -> trusted release worker -> registry digest/signature/attestations -> reviewed GitOps PR -> Argo CD reconciliation.
 
 The repository is public. The current Jenkins source-validation job still uses a local bundle snapshot; GitHub Branch Source, webhooks, and a permanent SCM job are not configured yet.
-GitOps delivery will be a separate workflow after CI. Jenkins stops after producing and verifying the image.
+The release job publishes the image and requests a GitOps change; Argo CD owns deployment reconciliation. Neither PR CI nor Jenkins directly applies application manifests.
 
 ## Trust boundaries
 
 1. Jenkins controller stores job configuration and credentials. It schedules work and should not execute repository code.
 2. Agent workspaces execute source-controlled scripts and tests. Treat that code as untrusted until reviewed.
-3. Docker daemon access can control the host. The lab pipeline requires a dedicated agent. A production setup should use disposable agents or a remote/rootless builder for pull requests and separate trusted release work from untrusted PR work.
-4. Credentials should be scoped to the stage that needs them. This CI example needs no credentials because it does not push an image.
-5. The output is evidence and a tested local image. The next delivery step should publish an immutable image digest and let GitOps promote that digest through environment-specific configuration.
+3. Docker daemon access can control the host. The PR pipeline label must resolve only to disposable single-build agents; do not point it at the current shared static worker. Keep a separate trusted release pool.
+4. Credentials should be scoped to the stage that needs them. PR CI has no release credentials. The protected release job scopes registry and GitOps write identities to the stages that need them; KMS signing uses a restricted worker identity.
+5. The release output is evidence plus a signed immutable digest. A reviewed Git change promotes it; Argo CD reconciles environment configuration.
 
 Jenkins recommends running builds on agents and setting the built-in node executor count to zero; see [Controller Isolation](https://www.jenkins.io/doc/book/security/controller-isolation/).
 
@@ -23,7 +23,7 @@ Jenkins recommends running builds on agents and setting the built-in node execut
 - Unit/API tests: exercise health checks, CRUD, filtering, validation, invalid requests, response headers, and body limits.
 - Secret scan: reject committed credentials before image construction.
 - Container build: the test stage reruns the test suite; the runtime stage copies only the application.
-- Image scan: fail on high or critical unfixed findings. Triage exceptions rather than hiding them with a blanket ignore.
+- Image scan: retain all high/critical findings and fail on those with available fixes; time-bound and assign an owner to unfixed risk.
 - SBOM: create SPDX JSON for downstream tracking and release evidence.
 - Smoke test: start with constrained privileges, wait for health, call the API, and assert the runtime user.
 

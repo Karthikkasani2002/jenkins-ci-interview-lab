@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: upi-lab-dev
+  namespace: argocd
+spec:
+  description: Development namespace for the Jenkins CI/CD lab.
+  sourceRepos:
+    - https://github.com/Karthikkasani2002/jenkins-ci-interview-lab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: upi-lab-dev
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler

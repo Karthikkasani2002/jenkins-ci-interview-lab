@@ -1,10 +1,10 @@
 pipeline {
-  // Docker daemon access is privileged. Use a dedicated, disposable agent for untrusted branches.
-  agent { label 'linux && docker' }
+  // This label must exist only on an isolated worker with the declared builder toolchain.
+  agent { label 'linux && docker && ephemeral-ci' }
 
   options {
     timestamps()
-    timeout(time: 30, unit: 'MINUTES')
+    timeout(time: 45, unit: 'MINUTES')
     buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '15'))
     disableConcurrentBuilds(abortPrevious: true)
     skipDefaultCheckout(true)
@@ -12,6 +12,7 @@ pipeline {
 
   environment {
     IMAGE_NAME = 'jenkins-ci-interview-lab'
+    NODE_BASE_IMAGE = 'node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53'
   }
 
   stages {
@@ -31,6 +32,7 @@ pipeline {
           npm --version
           docker --version
           docker info >/dev/null
+          docker buildx version
           gitleaks version
           trivy --version
           syft version
@@ -42,39 +44,44 @@ pipeline {
       }
     }
 
-    stage('Source checks') {
+    stage('Source gates') {
       parallel {
-        stage('Static checks and dependency audit') {
-          steps {
-            sh '''#!/bin/sh
-              set -eu
-              npm run check
-              npm audit --omit=dev --audit-level=high
-            '''
-          }
-        }
-
-        stage('Unit and API tests') {
+        stage('Unit tests and coverage') {
           steps {
             sh '''#!/bin/sh
               set +e
-              npm test
-              test_status=$?
-              node --test --test-reporter=junit > test-results/node-junit.xml
+              npm test > artifacts/test-coverage.txt 2>&1
+              coverage_status=$?
+              node --test --test-reporter=junit > test-results/node-junit.xml 2> artifacts/junit-stderr.txt
               junit_status=$?
               node scripts/junit-to-suite.js test-results/node-junit.xml test-results/junit.xml
               normalize_status=$?
               set -e
-              if [ "$test_status" -ne 0 ] || [ "$junit_status" -ne 0 ] || [ "$normalize_status" -ne 0 ]; then
+              cat artifacts/test-coverage.txt
+              if [ "$coverage_status" -ne 0 ] || [ "$junit_status" -ne 0 ] || [ "$normalize_status" -ne 0 ]; then
                 exit 1
               fi
             '''
           }
         }
 
-        stage('Secret scan') {
+        stage('Static checks and dependency audit') {
           steps {
-            sh 'gitleaks detect --source . --redact --exit-code 1'
+            sh '''#!/bin/sh
+              set -eu
+              npm run check
+              npm audit --audit-level=high
+            '''
+          }
+        }
+
+        stage('Secrets and configuration scan') {
+          steps {
+            sh '''#!/bin/sh
+              set -eu
+              gitleaks detect --source . --redact --exit-code 1
+              trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-dirs .git .
+            '''
           }
         }
       }
@@ -86,22 +93,31 @@ pipeline {
           set -eu
           image_ref="$IMAGE_NAME:$BUILD_NUMBER"
           docker build --pull \
+            --build-arg NODE_BASE_IMAGE="$NODE_BASE_IMAGE" \
             --build-arg VCS_REF="$GIT_COMMIT" \
             --build-arg VCS_URL="$GIT_URL" \
+            --label org.opencontainers.image.revision="$GIT_COMMIT" \
             --tag "$image_ref" .
+          docker image inspect "$image_ref" --format '{{json .Config.Labels}}' > artifacts/image-labels.json
         '''
       }
     }
 
-    stage('Image security and SBOM') {
+    stage('Image gates') {
       parallel {
         stage('Vulnerability scan') {
           steps {
-            sh 'trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL "$IMAGE_NAME:$BUILD_NUMBER"'
+            sh '''#!/bin/sh
+              set -eu
+              trivy image --exit-code 0 --severity HIGH,CRITICAL \
+                --format json --output artifacts/trivy-image-all-findings.json "$IMAGE_NAME:$BUILD_NUMBER"
+              trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL \
+                --format json --output artifacts/trivy-image-blocking.json "$IMAGE_NAME:$BUILD_NUMBER"
+            '''
           }
         }
 
-        stage('Generate SBOM') {
+        stage('Generate SPDX SBOM') {
           steps {
             sh 'syft "$IMAGE_NAME:$BUILD_NUMBER" --output spdx-json=artifacts/sbom.spdx.json'
           }
@@ -120,7 +136,7 @@ pipeline {
 
           docker run --detach --name "$container_name" \
             --publish 127.0.0.1::3000 \
-            --read-only --tmpfs /tmp \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
             --cap-drop=ALL --security-opt=no-new-privileges:true \
             --memory=128m --cpus=1 --pids-limit=128 \
             "$image_ref" >/dev/null
@@ -131,45 +147,56 @@ pipeline {
             port=$(docker port "$container_name" 3000/tcp | sed 's/.*://')
             if [ -n "$port" ] && curl --fail --silent "http://127.0.0.1:$port/health/ready" >/dev/null; then
               health=$(docker inspect --format '{{.State.Health.Status}}' "$container_name")
-              if [ "$health" = "healthy" ]; then
-                break
-              fi
+              if [ "$health" = "healthy" ]; then break; fi
             fi
             sleep 1
           done
 
           test -n "$port"
           test "$health" = "healthy"
-          curl --fail --silent --show-error "http://127.0.0.1:$port/health/live"
+          curl --fail --silent --show-error "http://127.0.0.1:$port/health/live" >/dev/null
           response=$(curl --fail --silent --show-error \
             --header 'content-type: application/json' \
             --data '{"title":"container smoke test"}' \
             "http://127.0.0.1:$port/api/v1/tasks")
-          printf '%s' "$response" | grep -q '"status":"open"'
-          test "$(docker inspect --format '{{.Config.User}}' "$container_name")" = "node"
-          test "$(docker inspect --format '{{.State.Running}}' "$container_name")" = "true"
+          printf '%s' "$response" | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const x=JSON.parse(s);if(x.status!=='open'||!x.id)process.exit(1);});"
+
+          docker inspect "$container_name" | node -e "
+            let s='';
+            process.stdin.on('data',c=>s+=c).on('end',()=>{
+              const c=JSON.parse(s)[0];
+              if(c.Config.User!=='node'||c.HostConfig.ReadonlyRootfs!==true||
+                 !c.HostConfig.CapDrop.includes('ALL')||c.HostConfig.PidsLimit!==128) process.exit(1);
+            });
+          "
         '''
       }
     }
 
-    stage('Prepare CI evidence') {
+    stage('Prepare evidence') {
       steps {
-        sh 'docker image inspect "$IMAGE_NAME:$BUILD_NUMBER" --format "{{json .Config.Labels}}" > artifacts/image-labels.json'
+        sh '''#!/bin/sh
+          set -eu
+          printf 'commit=%s\\nimage=%s:%s\\n' "$GIT_COMMIT" "$IMAGE_NAME" "$BUILD_NUMBER" > artifacts/build-info.txt
+          docker image inspect "$IMAGE_NAME:$BUILD_NUMBER" --format '{{json .RootFS.Layers}}' > artifacts/image-layers.json
+        '''
       }
     }
   }
 
   post {
     always {
-      sh 'docker rm --force "$IMAGE_NAME-smoke-$BUILD_NUMBER" >/dev/null 2>&1 || true'
-      sh 'docker image rm "$IMAGE_NAME:$BUILD_NUMBER" >/dev/null 2>&1 || true'
+      sh '''#!/bin/sh
+        if command -v docker >/dev/null 2>&1; then
+          docker rm --force "$IMAGE_NAME-smoke-$BUILD_NUMBER" >/dev/null 2>&1 || true
+          docker image rm "$IMAGE_NAME:$BUILD_NUMBER" >/dev/null 2>&1 || true
+        fi
+      '''
       junit testResults: 'test-results/junit.xml', allowEmptyResults: true
-      archiveArtifacts artifacts: 'artifacts/**', fingerprint: true, allowEmptyArchive: true
+      archiveArtifacts artifacts: 'artifacts/**,test-results/**', fingerprint: true, allowEmptyArchive: true
     }
     success {
-      echo 'CI passed. The image remains local to the agent; deployment is handled by the separate GitOps delivery workflow.'
+      echo 'CI evidence is archived. This PR pipeline does not publish images or deploy.'
     }
   }
 }
-
-

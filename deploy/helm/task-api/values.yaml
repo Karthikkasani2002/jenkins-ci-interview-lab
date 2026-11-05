@@ -1,0 +1,75 @@
+nameOverride: ""
+environment: lab
+replicaCount: 1
+imagePullSecrets: []
+image:
+  repository: ghcr.io/karthikkasani2002/jenkins-ci-interview-lab
+  tag: bootstrap
+  digest: ""
+  pullPolicy: IfNotPresent
+containerPort: 3000
+service:
+  type: ClusterIP
+  port: 80
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+probes:
+  startup:
+    enabled: true
+    path: /health/live
+    failureThreshold: 30
+    periodSeconds: 2
+  liveness:
+    path: /health/live
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /health/ready
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+terminationGracePeriodSeconds: 30
+topologySpreadConstraints: []
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+networkPolicy:
+  enabled: false
+  ingressNamespace: ingress-nginx
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  host: api.example.internal
+  tls:
+    enabled: false
+    secretName: task-api-tls

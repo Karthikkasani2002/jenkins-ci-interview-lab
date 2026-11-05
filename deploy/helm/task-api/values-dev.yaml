@@ -1,0 +1,12 @@
+environment: dev
+replicaCount: 0
+imagePullSecrets: []
+image:
+  repository: ghcr.io/karthikkasani2002/jenkins-ci-interview-lab
+  tag: bootstrap
+  digest: ""
+  pullPolicy: IfNotPresent
+ingress:
+  enabled: false
+networkPolicy:
+  enabled: false

@@ -2,20 +2,20 @@
 
 ## Repository and current lab status
 
-The public source repo is [Karthikkasani2002/jenkins-ci-interview-lab](https://github.com/Karthikkasani2002/jenkins-ci-interview-lab). Jenkins build #4 validated a local source snapshot; a permanent GitHub Multibranch job and the Docker image stages still need controller plugin setup and agent provisioning.
+The public source repo is [Karthikkasani2002/jenkins-ci-interview-lab](https://github.com/Karthikkasani2002/jenkins-ci-interview-lab). Jenkins build #4 validated a local source snapshot. CI, protected release and GitOps files are now authored; the permanent Multibranch job, isolated agents, registry/signing identity and cluster install still need live setup.
 
 ## 30-second answer
 
-“I use Jenkins as an orchestration control plane and run builds on isolated agents. Every change gets fast, deterministic feedback: syntax and dependency checks, API tests with coverage, secret scanning, a container build, vulnerability scanning, an SBOM, and a smoke test. The pipeline stores evidence and cleans up. Jenkins does not deploy; a GitOps controller will later reconcile an immutable image digest. I measure feedback time, flakiness, queue delay, and recovery time, then improve the slowest bottleneck.”
+“I use Jenkins as an orchestration control plane and run builds on isolated agents. Every change gets fast, deterministic feedback: syntax and dependency checks, API tests with coverage, secret scanning, a container build, vulnerability scanning, an SBOM, and a smoke test. The pipeline stores evidence and cleans up. A separate protected release job publishes and signs the immutable digest, then opens a promotion PR; Argo CD reconciles the merged desired state. I measure feedback time, flakiness, queue delay, and recovery time, then improve the slowest bottleneck.”
 
 ## Two-minute walkthrough
 
 1. Source control: short-lived branches and pull requests into protected main. Jenkins Multibranch discovers branch and PR revisions. The merge rule requires a successful CI status and review.
-2. Orchestration: the controller schedules work but does not execute repository code. A dedicated Linux agent supplies Node, Docker, and pinned scanners.
+2. Orchestration: the controller schedules work but does not execute repository code. A disposable untrusted CI agent supplies Node, a builder and pinned scanners; a separate trusted release worker holds narrowly scoped publish/signing identities.
 3. Quality gates: independent checks run in parallel and return JUnit and coverage evidence. The gates include dependency and secret scanning.
 4. Artifact: the Dockerfile runs tests in a build stage, then copies only the runtime files into a non-root image.
 5. Validation: Trivy scans the image, Syft generates an SPDX SBOM, and a constrained container smoke test verifies readiness and an API request.
-6. Delivery boundary: Jenkins stops after CI evidence. A separate GitOps workflow will promote the immutable image digest.
+6. Delivery boundary: Jenkins release creates a reviewed GitOps promotion PR but does not apply workloads. Argo CD syncs the merged dev state; production remains separately approved.
 
 ## Decisions and tradeoffs
 

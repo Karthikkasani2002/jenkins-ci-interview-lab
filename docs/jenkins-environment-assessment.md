@@ -18,7 +18,7 @@ No container build, image scan, SBOM, or container smoke test ran during this re
 - A temporary local-only `jenkins-source-validation` job passed build #4. The production Jenkinsfile is not yet configured as a permanent SCM job.
 - The built-in node is online with 2 executors.
 - The static Ubuntu agent runs Ubuntu 24.04 on x86_64 with one executor. Its lab address and home path are omitted.
-- Its configured label is only `agent-static-1`; the project Jenkinsfile expects `linux && docker`.
+- Its configured label is only `agent-static-1`; the PR Pipeline now expects `linux && docker && ephemeral-ci`; the protected release job expects `linux && docker && release`. Neither label should point at this shared static worker.
 - The Git, Pipeline, and JUnit plugins are installed. GitHub Branch Source and Docker Pipeline are not installed.
 
 ## Agent toolchain
@@ -45,8 +45,16 @@ No pipeline-ready container builder/runtime is configured for this agent. The ro
 ## Work required before a full Jenkins run
 
 1. Provision the dedicated agent with the tools above. The current worker account cannot install host packages through noninteractive sudo, so use a managed agent image or provide a controlled OS-level provisioning path.
-2. Assign `linux` and `docker` labels only after those capabilities are available.
+2. Provision separate `ephemeral-ci` and trusted `release` worker pools; assign their labels only after capabilities and isolation are verified.
 3. Configure a Multibranch Pipeline for the public repo `https://github.com/Karthikkasani2002/jenkins-ci-interview-lab`. Install GitHub Branch Source and configure pull-request discovery and webhooks/status reporting.
 4. For controller isolation, set the built-in node executor count to zero; this assessment did not change it.
 
 The temporary source-validation job uses a local Git bundle snapshot and is not the production Jenkinsfile-from-SCM job. The Docker build, Trivy image scan, Syft image SBOM, and container smoke test have not run because the agent does not currently have a container runtime.
+
+## CI/CD artifacts authored on 2026-11-05
+
+- PR and protected-release Jenkinsfiles, JCasC baseline, Helm chart, Argo CD bootstrap/dev Applications, production example, install script and UPI/interview docs are authored in this workspace.
+- The release job is design only until scoped registry, GitHub and KMS identities are configured and a protected build is run.
+- JCasC proposes zero controller executors but has not been applied. The last live Jenkins check showed two built-in executors.
+- At the final workspace check, Jenkins was unreachable. No Kubernetes context, kubectl or Helm is available here, so Argo CD installation and reconciliation could not run.
+- The existing static worker is not approved for untrusted PR execution; the new PR agent label requires disposable isolated agents.

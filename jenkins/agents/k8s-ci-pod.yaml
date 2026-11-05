@@ -1,0 +1,38 @@
+# Reference only. Requires Kubernetes plugin/cloud and an approved immutable agent image.
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins-trust: untrusted-ci
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  terminationGracePeriodSeconds: 30
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: jnlp
+      image: registry.example.invalid/platform/jenkins-agent@sha256:REPLACE_WITH_APPROVED_DIGEST
+      imagePullPolicy: IfNotPresent
+      workingDir: /home/jenkins/agent
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: workspace
+          mountPath: /home/jenkins/agent
+  volumes:
+    - name: workspace
+      emptyDir:
+        sizeLimit: 8Gi

@@ -1,0 +1,19 @@
+# Manual production example. Create upi-lab-prod AppProject and approve a real image digest first.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: task-api-prod
+  namespace: argocd
+spec:
+  project: upi-lab-prod
+  source:
+    repoURL: https://github.com/Karthikkasani2002/jenkins-ci-interview-lab.git
+    targetRevision: main
+    path: deploy/helm/task-api
+    helm:
+      releaseName: task-api
+      valueFiles: [values.yaml, values-prod.yaml]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: upi-lab-prod
+  # No auto-sync: production promotion remains a reviewed change.

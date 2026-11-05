@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: upi-lab-bootstrap
+  namespace: argocd
+spec:
+  description: Restricted project for the root application.
+  sourceRepos:
+    - https://github.com/Karthikkasani2002/jenkins-ci-interview-lab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: argoproj.io
+      kind: Application
+    - group: argoproj.io
+      kind: AppProject

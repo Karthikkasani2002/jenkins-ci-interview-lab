@@ -1,0 +1,218 @@
+pipeline {
+  // Configure this as a separate, protected main-branch Pipeline-from-SCM job.
+  // Never expose its registry, signing, or GitHub write credentials to PR jobs.
+  agent { label 'linux && docker && release' }
+
+  options {
+    timestamps()
+    timeout(time: 90, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
+    disableConcurrentBuilds(abortPrevious: false)
+    skipDefaultCheckout(true)
+  }
+
+  environment {
+    IMAGE_NAME = 'jenkins-ci-interview-lab'
+    IMAGE_REPOSITORY = 'ghcr.io/karthikkasani2002/jenkins-ci-interview-lab'
+    NODE_BASE_IMAGE = 'node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53'
+    COSIGN_KMS_URI = 'awskms://alias/jenkins-ci-release'
+  }
+
+  stages {
+    stage('Checkout and trust gate') {
+      steps {
+        deleteDir()
+        checkout scm
+        sh 'mkdir -p artifacts test-results'
+        script {
+          def sourceRef = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
+          if (env.CHANGE_ID || !(['main', 'origin/main', 'refs/heads/main', 'refs/remotes/origin/main'].contains(sourceRef))) {
+            error('Release jobs run only from the protected main branch.')
+          }
+        }
+      }
+    }
+
+    stage('Preflight') {
+      steps {
+        sh '''#!/bin/sh
+          set -eu
+          node --version
+          npm --version
+          docker info >/dev/null
+          docker buildx version
+          gitleaks version
+          trivy --version
+          syft version
+          cosign version
+          gh --version
+          test -n "$COSIGN_KMS_URI"
+          npm ci --ignore-scripts --no-audit --no-fund
+        '''
+      }
+    }
+
+    stage('Release quality gates') {
+      parallel {
+        stage('Tests and coverage') {
+          steps {
+            sh '''#!/bin/sh
+              set +e
+              npm test > artifacts/test-coverage.txt 2>&1
+              coverage_status=$?
+              node --test --test-reporter=junit > test-results/node-junit.xml 2> artifacts/junit-stderr.txt
+              junit_status=$?
+              node scripts/junit-to-suite.js test-results/node-junit.xml test-results/junit.xml
+              normalize_status=$?
+              set -e
+              cat artifacts/test-coverage.txt
+              if [ "$coverage_status" -ne 0 ] || [ "$junit_status" -ne 0 ] || [ "$normalize_status" -ne 0 ]; then
+                exit 1
+              fi
+            '''
+          }
+        }
+
+        stage('Static, dependency, and secret checks') {
+          steps {
+            sh '''#!/bin/sh
+              set -eu
+              npm run check
+              npm audit --audit-level=high
+              gitleaks detect --source . --redact --exit-code 1
+              trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-dirs .git .
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Publish, scan, smoke-test, and sign immutable image') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'ghcr-publisher',
+          usernameVariable: 'GHCR_USERNAME',
+          passwordVariable: 'GHCR_TOKEN'
+        )]) {
+          sh '''#!/bin/sh
+            set -eu
+            set +x
+            export DOCKER_CONFIG="$(mktemp -d)"
+            cleanup() {
+              docker rm --force "$IMAGE_NAME-release-smoke-$BUILD_NUMBER" >/dev/null 2>&1 || true
+              if [ -n "${IMAGE_DIGEST:-}" ]; then
+                docker image rm "$IMAGE_REPOSITORY@$IMAGE_DIGEST" >/dev/null 2>&1 || true
+              fi
+              docker logout ghcr.io >/dev/null 2>&1 || true
+              rm -rf "$DOCKER_CONFIG"
+            }
+            trap cleanup EXIT INT TERM
+
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+            docker buildx build --pull --platform linux/amd64 \
+              --build-arg NODE_BASE_IMAGE="$NODE_BASE_IMAGE" \
+              --build-arg VCS_REF="$GIT_COMMIT" \
+              --build-arg VCS_URL="$GIT_URL" \
+              --tag "$IMAGE_REPOSITORY:$GIT_COMMIT" \
+              --metadata-file artifacts/build-metadata.json \
+              --provenance=mode=max --sbom=true --push .
+
+            digest=$(node -e "const m=require('./artifacts/build-metadata.json');const d=m['containerimage.digest'];if(!/^sha256:[a-f0-9]{64}$/.test(d))process.exit(1);process.stdout.write(d);")
+            printf '%s\n' "$digest" > artifacts/image-digest.txt
+            image_ref="$IMAGE_REPOSITORY@$digest"
+
+            trivy image --exit-code 0 --severity HIGH,CRITICAL \
+              --format json --output artifacts/trivy-image-all-findings.json "$image_ref"
+            trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL \
+              --format json --output artifacts/trivy-image-blocking.json "$image_ref"
+            syft "$image_ref" --output spdx-json=artifacts/sbom.spdx.json
+
+            docker pull "$image_ref"
+            container_name="$IMAGE_NAME-release-smoke-$BUILD_NUMBER"
+            docker run --detach --name "$container_name" \
+              --publish 127.0.0.1::3000 \
+              --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+              --cap-drop=ALL --security-opt=no-new-privileges:true \
+              --memory=128m --cpus=1 --pids-limit=128 \
+              "$image_ref" >/dev/null
+
+            port=""
+            health=""
+            for attempt in $(seq 1 30); do
+              port=$(docker port "$container_name" 3000/tcp | sed 's/.*://')
+              if [ -n "$port" ] && curl --fail --silent "http://127.0.0.1:$port/health/ready" >/dev/null; then
+                health=$(docker inspect --format '{{.State.Health.Status}}' "$container_name")
+                if [ "$health" = "healthy" ]; then break; fi
+              fi
+              sleep 1
+            done
+            test -n "$port"
+            test "$health" = "healthy"
+            curl --fail --silent --show-error "http://127.0.0.1:$port/health/live" >/dev/null
+
+            cosign sign --yes --key "$COSIGN_KMS_URI" "$image_ref"
+            cosign attest --yes --key "$COSIGN_KMS_URI" \
+              --predicate artifacts/sbom.spdx.json --type spdxjson "$image_ref"
+            cosign verify --key "$COSIGN_KMS_URI" "$image_ref" > artifacts/cosign-verify.json
+            cosign verify-attestation --key "$COSIGN_KMS_URI" --type spdxjson "$image_ref" > artifacts/cosign-attestation-verify.json
+          '''
+          script {
+            env.IMAGE_DIGEST = readFile('artifacts/image-digest.txt').trim()
+          }
+        }
+      }
+    }
+
+    stage('Open development GitOps promotion PR') {
+      steps {
+        withCredentials([string(credentialsId: 'github-gitops-bot', variable: 'GH_TOKEN')]) {
+          sh '''#!/bin/sh
+            set -eu
+            set +x
+            promotion_branch="promote/dev-$BUILD_NUMBER"
+            test "$(printf '%s' "$IMAGE_DIGEST" | grep -Ec '^sha256:[a-f0-9]{64}$')" -eq 1
+            test "$(grep -c '^  digest:' deploy/helm/task-api/values-dev.yaml)" -eq 1
+
+            sed -E -i "s/^  digest:.*/  digest: $IMAGE_DIGEST/" deploy/helm/task-api/values-dev.yaml
+            git diff --check
+            git config user.name 'jenkins-ci-bot'
+            git config user.email 'jenkins-ci-bot@users.noreply.github.com'
+            git switch --create "$promotion_branch"
+            git add deploy/helm/task-api/values-dev.yaml
+            git commit -m "chore(gitops): promote verified image to dev"
+            gh auth setup-git
+            git push --set-upstream origin "$promotion_branch"
+            GH_TOKEN="$GH_TOKEN" gh pr create \
+              --base main \
+              --head "$promotion_branch" \
+              --title "Promote verified image to development" \
+              --body "Image: $IMAGE_REPOSITORY@$IMAGE_DIGEST
+
+Source commit: $GIT_COMMIT
+Build: $BUILD_URL
+
+Argo CD syncs development after this reviewed change merges."
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh '''#!/bin/sh
+        if command -v docker >/dev/null 2>&1; then
+          docker rm --force "$IMAGE_NAME-release-smoke-$BUILD_NUMBER" >/dev/null 2>&1 || true
+              if [ -n "${IMAGE_DIGEST:-}" ]; then
+                docker image rm "$IMAGE_REPOSITORY@$IMAGE_DIGEST" >/dev/null 2>&1 || true
+              fi
+        fi
+      '''
+      junit testResults: 'test-results/junit.xml', allowEmptyResults: true
+      archiveArtifacts artifacts: 'artifacts/**,test-results/**', fingerprint: true, allowEmptyArchive: true
+    }
+    success {
+      echo 'Immutable image verified and signed. Deployment waits for the GitOps promotion PR to merge.'
+    }
+  }
+}
