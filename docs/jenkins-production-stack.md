@@ -55,7 +55,7 @@ YAML belongs to the platform config consumed by Jenkins/Kubernetes: JCasC, Kuber
 | Smoke | Non-root, read-only root, dropped capabilities, CPU/memory/PID bounds, health and API calls |
 | Post | JUnit, archived/fingerprinted reports, image/container cleanup |
 
-Release credentials are separate from PR CI. The protected release job expects ghcr-publisher (GHCR write only) and github-gitops-bot (promotion branch/PR only); KMS uses the configured worker identity and alias. Never store token values in Git.
+Release credentials are separate from PR CI. The protected release job expects ghcr-publisher (GHCR write only) and github-gitops-bot (promotion branch/PR only); KMS uses the configured worker identity and an awskms:///alias/... URI. The release worker must provide a Buildx docker-container builder (or a containerd image store) because registry attestations need an attestation-capable image store. Never store token values in Git.
 
 ## Interview coverage
 
@@ -81,6 +81,8 @@ These are remaining portfolio goals, not claims from this lab. See docs/upi-ci-c
 - [Jenkins Configuration as Code](https://www.jenkins.io/doc/book/managing/casc/)
 - [GitHub Branch Source plugin](https://plugins.jenkins.io/github-branch-source/)
 - [Jenkins controller isolation](https://www.jenkins.io/doc/book/security/controller-isolation/)
+- [BuildKit attestations and image-index storage](https://docs.docker.com/build/metadata/attestations/)
+- [Cosign KMS key URI and verification](https://docs.sigstore.dev/cosign/key_management/overview/)
 
 ## Advanced Jenkins interview coverage matrix
 

@@ -25,11 +25,11 @@ Source commit, Jenkins build, digest, SBOM/provenance, signature and GitOps chan
 - scripts/install-argocd.sh requires explicit KUBE_CONTEXT, at least one Ready node and pins Argo CD v3.6.0; it waits for CRDs/deployments then applies bootstrap.
 - deploy/argocd/bootstrap installs a restricted root AppProject and root Application.
 - deploy/argocd/apps has a dev-only project and Application with an explicit resource allowlist and namespace.
-- deploy/helm/task-api provides security context, resource bounds, probes, graceful termination and optional PDB/HPA/NetworkPolicy/TLS ingress. Production render requires an actual sha256 digest.
+- deploy/helm/task-api provides security context, resource bounds, probes, graceful termination, image pull secret references and optional PDB/HPA/NetworkPolicy/TLS ingress. Production render requires an actual sha256 digest.
 - Dev begins at zero replicas and a bootstrap tag. The first release promotion supplies the immutable digest.
 - Production example is manual. Add the actual prod AppProject, registry pull identity, admission/network policy and approved promotion before use.
 
-The install script has not run. This workspace has no Kubernetes context, kubectl or Helm. Argo installation requires an actual cluster and cluster-admin access; Jenkins plugins cannot replace the cluster.
+BuildKit attestations are pushed through a named docker-container builder as required by Docker BuildKit. Cosign uses an awskms:///alias/... key URI and verifies the image signature and SPDX attestation. The install script has not run. This workspace has no Kubernetes context, kubectl or Helm. Argo installation requires an actual cluster and cluster-admin access; Jenkins plugins cannot replace the cluster.
 
 ## Payment service requirements beyond this lab
 
@@ -64,3 +64,5 @@ Do not claim compliance or invent TPS targets.
 
 - [Argo CD v3.6.0 release and pinned installation manifest](https://github.com/argoproj/argo-cd/releases/tag/v3.6.0)
 - [Argo CD automated sync, pruning and self-heal](https://argo-cd.readthedocs.io/en/latest/user-guide/auto_sync/)
+- [Docker BuildKit attestations](https://docs.docker.com/build/metadata/attestations/)
+- [Sigstore Cosign KMS key management](https://docs.sigstore.dev/cosign/key_management/overview/)
