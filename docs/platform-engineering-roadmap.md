@@ -30,14 +30,14 @@ The supplied encyclopedia is treated as reference material describing technologi
 3. Added automated tests and coverage thresholds. The recorded local result is 16 tests passing, 100% line coverage, 98.92% branch coverage, and 100% function coverage.
 4. Added a multi-stage Dockerfile with a test stage and a smaller non-root runtime stage, plus health checking and constrained runtime behavior.
 5. Authored Declarative PR CI plus a separate protected-main release Pipeline: build, tests/coverage, dependency/security gates, container scan, SPDX SBOM, hardened smoke test, artifact publication, immutable registry digest, provenance/signature design, and reviewed GitOps promotion PR.
-6. Ran Jenkins build #4 for source validation successfully from a local Git bundle snapshot. A later build #5 confirmed the worker is online and passed `npm ci`, static checks, and dependency audit, but failed while resolving the GitHub release host to download Gitleaks; the Jenkins test stage was skipped. The Jenkinsfile is not yet running from a permanent SCM job.
+6. Ran Jenkins source validation successfully in builds #4 and #6 from local Git bundle snapshots. Build #5 hit a transient DNS timeout while downloading Gitleaks; a read-only follow-up confirmed DNS and HTTPS worked, and build #6 passed Gitleaks plus all 16 tests and coverage thresholds. The Jenkinsfile is not yet running from a permanent SCM job.
 7. Added CI/CD architecture, environment assessment, plugin and YAML/Groovy map, Argo CD/Helm setup, UPI-specific remaining gates, and senior/principal interview narrative.
 8. Validated both Jenkinsfiles with the live Jenkins Pipeline Model Converter. Local checks still pass: 16 tests, 100% line/function coverage, and 98.92% branch coverage.
 
 ### Jenkins and GitOps work that is still open
 
 - The Jenkins controller does not yet have a permanent GitHub Multibranch Pipeline, branch/PR discovery, webhook, and status-check flow for this repository.
-- The static worker is online but lacks the isolated container/scanner toolchain. Its current source-validation attempt also could not resolve the GitHub release host for Gitleaks. Docker CLI/daemon (or another selected builder), Gitleaks, Trivy, and Syft need to be supplied through a reproducible agent image or an approved provisioning path. Do not run repository builds on the controller.
+- The static worker is online and can run source validation, but it is not an isolated container-build worker. Docker CLI/daemon (or another selected builder), Trivy, and Syft need to be supplied through a reproducible agent image or approved provisioning path. Do not run repository builds on the controller.
 - The full Jenkinsfile has not yet passed end to end. In particular, the image build, Trivy image scan, Syft image SBOM, smoke test, artifact archive, and cleanup are designed but unverified in Jenkins.
 - The controller's built-in executors have not been set to zero. Confirm controller isolation before treating the lab as production-shaped.
 - A protected release pipeline and Argo CD/Helm GitOps configuration are authored; they have not passed live publication or cluster reconciliation.
@@ -86,9 +86,9 @@ Keep this section current as work proceeds. PARTIAL means the design/code exists
 |---|---|---|---|---|
 | JEN-01 | Application and quality gates | **DONE** | API, static checks, dependency audit, 16 tests, JUnit/coverage thresholds | Preserve test and coverage reports on Jenkins runs; link evidence to each revision |
 | JEN-02 | Declarative Jenkins pipeline design | **PARTIAL** | PR Jenkinsfile and release Pipeline authored with quality/security/image/evidence gates | Provision isolated agent and execute all stages from SCM; fix live failures |
-| JEN-03 | Source validation in Jenkins | **PARTIAL** | Build #4 passed from a local Git bundle snapshot. Build #5 passed npm install, static checks, and dependency audit on the online worker | Fix approved DNS/tool delivery for Gitleaks and get a complete repeatable source validation run; then replace this local-bundle job with SCM-backed evidence |
+| JEN-03 | Source validation in Jenkins | **DONE** | Build #6 passed source gates, Gitleaks, all 16 tests, JUnit, and coverage thresholds on the online worker | Keep this as source-validation evidence; it is not equivalent to Multibranch CI, so prove the Jenkinsfile from SCM under JEN-04 |
 | JEN-04 | Jenkinsfile from public GitHub SCM | **WAITING** | Public GitHub repository exists | Configure GitHub Branch Source/Multibranch, PR discovery, webhook and commit status checks; prove a PR run |
-| JEN-05 | Reproducible dedicated build agent | **WAITING** | 2026-11-15 live check confirmed `agent-static-1` is online; tool download from a GitHub release failed at DNS resolution | Fix approved worker DNS/HTTPS access or bake tools into a pinned managed image; provision separate disposable CI and trusted release workers; verify isolation and tool versions before adding labels |
+| JEN-05 | Reproducible dedicated build agent | **WAITING** | 2026-11-15 live check confirmed `agent-static-1` is online and source validation works; the full container/scanner toolchain is still absent | Provision a pinned managed image or approved host-level setup; provide separate disposable CI and trusted release workers; verify isolation and tool versions before adding labels |
 | JEN-06 | Full container pipeline | **WAITING** | Dockerfile and stages are authored | Run image build, vulnerability scan, SPDX SBOM generation, constrained smoke test, JUnit/artifact archive and cleanup; keep the exact successful build evidence |
 | JEN-07 | Controller isolation and Jenkins governance | **PARTIAL** | JCasC baseline sets built-in executors to zero; plugin/governance plan documented | Apply through approved controller configuration; verify executor count, permissions, backup/restore, plugin pins |
 | JEN-08 | Trust-separated and scalable agents | **NOT STARTED** | PR trust risks are described | Demonstrate disposable untrusted build capacity separated from trusted release/signing workers; measure queueing and agent utilization |
@@ -99,7 +99,7 @@ Keep this section current as work proceeds. PARTIAL means the design/code exists
 
 ### Jenkins next actions, in order
 
-1. Fix approved worker DNS/HTTPS access to tool sources or choose a pinned managed agent image; provision disposable CI and trusted release workers and verify isolation.
+1. Provision a pinned managed image or approved host-level setup for separate disposable CI and trusted release workers; install the container/scanner toolchain and verify isolation.
 2. Configure GitHub Branch Source, PR discovery, webhook/status reporting and required checks.
 3. Apply the JCasC controller baseline; verify zero built-in executors and complete plugin/authorization review.
 4. Run Jenkinsfile PR CI and close JEN-06 with build, scan, SBOM, smoke, report, archive and cleanup evidence.
