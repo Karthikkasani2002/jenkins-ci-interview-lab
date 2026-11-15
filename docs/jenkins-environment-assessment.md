@@ -58,3 +58,11 @@ The temporary source-validation job uses a local Git bundle snapshot and is not 
 - JCasC proposes zero controller executors but has not been applied. The last live Jenkins check showed two built-in executors.
 - At the final workspace check, Jenkins was unreachable. No Kubernetes context, kubectl or Helm is available here, so Argo CD installation and reconciliation could not run.
 - The existing static worker is not approved for untrusted PR execution; the new PR agent label requires disposable isolated agents.
+
+## Recheck on 2026-11-15
+
+- From this workspace, the Jenkins web endpoint and worker SSH endpoint were unreachable.
+- Hyper-V Manager showed the lab firewall, controller and worker VMs in Saved or Off states. The manager runs at a higher integrity level than this automation session; UI control was rejected and PowerShell Get-VM returned CIM access denied. No VM power state was changed.
+- The workspace still has no Kubernetes context, kubectl or Helm. Argo CD installation and sync remain pending.
+- Next host-side action: an authorized Hyper-V administrator should resume the firewall, Jenkins controller and intended worker VMs. Then provision separate disposable CI and trusted release workers through an OS-admin path before attaching Jenkins labels.
+
