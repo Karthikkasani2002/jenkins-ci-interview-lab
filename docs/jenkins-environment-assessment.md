@@ -66,3 +66,12 @@ The temporary source-validation job uses a local Git bundle snapshot and is not 
 - The workspace still has no Kubernetes context, kubectl or Helm. Argo CD installation and sync remain pending.
 - Next host-side action: an authorized Hyper-V administrator should resume the firewall, Jenkins controller and intended worker VMs. Then provision separate disposable CI and trusted release workers through an OS-admin path before attaching Jenkins labels.
 
+## Live recheck after lab resume on 2026-11-15
+
+- Jenkins 2.568.3 is reachable. The built-in node is online with two executors. `agent-static-1` is online with one executor and only its static label.
+- The existing source-validation job ran as build #5 on `agent-static-1`. `npm ci`, `npm run check`, and `npm audit --omit=dev --audit-level=high` completed; the audit reported zero vulnerabilities. The job then failed because its Gitleaks download could not resolve the GitHub release host. Jenkins skipped the test stage, so build #5 is not a passing CI result. Build #4 remains the earlier successful source-validation evidence.
+- Local `npm run check` and `npm test` pass: 16 tests, 100% line and function coverage, and 98.92% branch coverage.
+- Jenkins' Pipeline Model Converter accepted both `Jenkinsfile` and `Jenkinsfile.release` syntax. Neither file has run end to end from GitHub SCM.
+- GitHub Branch Source and Docker Pipeline are not installed. The available static worker is not labeled or provisioned for the pipeline's isolated container build, scanning, SBOM, and smoke-test stages.
+- The controller still has two built-in executors; the JCasC baseline has not been applied. No persistent Jenkins configuration was changed during this recheck.
+- Next: fix approved worker DNS/HTTPS access to tool sources or use a pinned managed agent image, then provision and verify separate disposable CI and trusted release workers before assigning labels. Keep the controller off build duty and run the full pipeline from SCM after that.
